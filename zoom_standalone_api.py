@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import os
 import sys
 from datetime import datetime, timezone
-
-import requests
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 ZOOM_OAUTH_URL = "https://zoom.us/oauth/token"
 ZOOM_API_BASE = "https://api.zoom.us/v2"
@@ -27,6 +30,53 @@ def require_env(name: str) -> str:
     if not value:
         raise RuntimeError(f"Missing required env var: {name}")
     return value
+
+
+def normalize_utc_iso8601(value: str) -> str:
+    """Return an RFC3339 UTC timestamp accepted by Zoom.
+
+    Accepts values like:
+    - 2026-03-15T17:00:00Z
+    - 2026-03-15T17:00:00+00:00
+    """
+    candidate = value.strip()
+    if candidate.endswith("Z"):
+        candidate = candidate[:-1] + "+00:00"
+
+    try:
+        parsed = datetime.fromisoformat(candidate)
+    except ValueError as exc:
+        raise RuntimeError(
+            "Invalid --start value. Use UTC ISO format like 2026-03-15T17:00:00Z"
+        ) from exc
+
+    if parsed.tzinfo is None:
+        raise RuntimeError("--start must include timezone information (use Z for UTC)")
+
+    normalized = parsed.astimezone(timezone.utc).replace(microsecond=0)
+    return normalized.isoformat().replace("+00:00", "Z")
+
+
+def http_post_json(url: str, headers: dict[str, str], params: dict[str, str] | None, body: dict[str, Any] | None) -> dict[str, Any]:
+    query = f"?{urlencode(params)}" if params else ""
+    payload = json.dumps(body).encode("utf-8") if body is not None else None
+
+    request = Request(
+        url=f"{url}{query}",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with urlopen(request, timeout=30) as response:  # noqa: S310 - Zoom API URL is constant
+            raw = response.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except HTTPError as err:
+        error_body = err.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Zoom API request failed (status={err.code}): {error_body}") from err
+    except URLError as err:
+        raise RuntimeError(f"Network error while calling Zoom API: {err}") from err
 
 
 def fetch_access_token(account_id: str, client_id: str, client_secret: str) -> str:
@@ -40,16 +90,14 @@ def fetch_access_token(account_id: str, client_id: str, client_secret: str) -> s
         "account_id": account_id,
     }
 
-    response = requests.post(ZOOM_OAUTH_URL, headers=headers, params=params, timeout=30)
-    response.raise_for_status()
-    payload = response.json()
+    payload = http_post_json(ZOOM_OAUTH_URL, headers=headers, params=params, body=None)
     token = payload.get("access_token")
     if not token:
         raise RuntimeError(f"OAuth response did not include access_token: {payload}")
-    return token
+    return str(token)
 
 
-def create_meeting(token: str, user_id: str, topic: str, start_time: str, duration: int) -> dict:
+def create_meeting(token: str, user_id: str, topic: str, start_time: str, duration: int) -> dict[str, Any]:
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -68,9 +116,8 @@ def create_meeting(token: str, user_id: str, topic: str, start_time: str, durati
     }
 
     endpoint = f"{ZOOM_API_BASE}/users/{user_id}/meetings"
-    response = requests.post(endpoint, headers=headers, json=body, timeout=30)
-    response.raise_for_status()
-    return response.json()
+    payload = http_post_json(endpoint, headers=headers, params=None, body=body)
+    return payload
 
 
 def parse_args() -> argparse.Namespace:
@@ -90,24 +137,23 @@ def main() -> int:
     args = parse_args()
 
     try:
+        if args.duration <= 0:
+            raise RuntimeError("--duration must be a positive integer")
+
+        normalized_start = normalize_utc_iso8601(args.start)
+
         account_id = require_env("ZOOM_ACCOUNT_ID")
         client_id = require_env("ZOOM_CLIENT_ID")
         client_secret = require_env("ZOOM_CLIENT_SECRET")
-
         token = fetch_access_token(account_id, client_id, client_secret)
-        meeting = create_meeting(token, args.user, args.topic, args.start, args.duration)
+        meeting = create_meeting(token, args.user, args.topic, normalized_start, args.duration)
 
         print("Meeting created successfully")
         print(f"ID: {meeting.get('id')}")
         print(f"Join URL: {meeting.get('join_url')}")
         print(f"Start URL: {meeting.get('start_url')}")
         return 0
-    except requests.HTTPError as err:
-        status = err.response.status_code if err.response is not None else "unknown"
-        body = err.response.text if err.response is not None else "<no response body>"
-        print(f"Zoom API request failed (status={status}): {body}", file=sys.stderr)
-        return 1
-    except Exception as err:  # noqa: BLE001
+    except RuntimeError as err:
         print(str(err), file=sys.stderr)
         return 1
 

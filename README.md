@@ -1,6 +1,12 @@
 # Standalone Zoom API Script
 
-This repository now includes a standalone Python script (`zoom_standalone_api.py`) that creates Zoom meetings using **Server-to-Server OAuth**.
+This repository includes a standalone Python script (`zoom_standalone_api.py`) that creates Zoom meetings using **Server-to-Server OAuth**.
+
+## What changed from the previous version
+
+- Removed third-party dependency on `requests` (now uses Python standard library only).
+- Added strict validation for `--start` timestamp and `--duration`.
+- Improved API/network error messages.
 
 ## 1) Create a Zoom Server-to-Server OAuth app
 
@@ -15,13 +21,7 @@ In Zoom Marketplace:
    - `meeting:write:admin`
    - `user:read:admin`
 
-## 2) Install dependencies
-
-```bash
-python -m pip install requests
-```
-
-## 3) Set credentials
+## 2) Set credentials
 
 ```bash
 export ZOOM_ACCOUNT_ID="your_account_id"
@@ -29,7 +29,7 @@ export ZOOM_CLIENT_ID="your_client_id"
 export ZOOM_CLIENT_SECRET="your_client_secret"
 ```
 
-## 4) Run script
+## 3) Run script
 
 ```bash
 python zoom_standalone_api.py --topic "API Demo" --start "2026-03-15T17:00:00Z" --duration 30
@@ -41,4 +41,14 @@ Optional:
 
 ## Notes on “run in Zoom”
 
-A standalone script does not run *inside* the Zoom client; it runs on your machine/server and calls Zoom's REST API. If you need in-client behavior, that is a separate Zoom App/Meeting SDK implementation.
+A standalone script does **not** run inside the Zoom desktop app. It runs on your machine/server and calls Zoom's REST API.
+If you need in-client behavior, that is a separate Zoom App or Meeting SDK implementation.
+
+## Publish to GitHub
+
+From this repo:
+
+```bash
+git remote add origin <your-github-repo-url>
+git push -u origin <your-branch-name>
+```
