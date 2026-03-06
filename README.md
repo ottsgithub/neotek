@@ -1,75 +1,108 @@
-# Zoom User Availability Tool (Zoom Phone AI Virtual Agent)
+# Standalone Zoom API Script
 
-This repository provides a starter API implementation you can use as a **Tool** for a Zoom Phone AI Virtual Agent skill.
+This repository includes a standalone Python script (`zoom_standalone_api.py`) that creates Zoom meetings using **Server-to-Server OAuth**.
 
-It checks whether a Zoom user is:
-- Busy
-- In a meeting
-- On a phone call
-- Available
+## What changed from the previous version
 
-## What this does
+- Removed third-party dependency on `requests` (now uses Python standard library only).
+- Added strict validation for `--start` timestamp and `--duration`.
+- Improved API/network error messages.
 
-The API endpoint `GET /tool/zoom-user-availability?userId=<zoom_user_id>` calls Zoom APIs and normalizes the response for the AI skill.
+## 1) Create a Zoom Server-to-Server OAuth app
 
-### Zoom endpoints used
+In Zoom Marketplace:
 
-1. `GET /v2/users/{userId}/presence_status`
-   - Used to determine if the user appears to be in a meeting or marked busy by presence.
-2. `GET /v2/phone/users/{userId}/status`
-   - Used to determine if the user is on an active Zoom Phone call.
+1. Create **Server-to-Server OAuth** app.
+2. Copy:
+   - Account ID
+   - Client ID
+   - Client Secret
+3. Add required scopes (minimum):
+   - `meeting:write:admin`
+   - `user:read:admin`
 
-> Note: Depending on your account features/plan and Zoom API behavior, phone status fields can vary. The implementation includes defensive parsing and fallbacks.
-
-## Setup
-
-1. Use Node.js 18+ (plain JavaScript runtime).
-2. Create an environment file:
+## 2) Set credentials
 
 ```bash
-cp .env.example .env
+export ZOOM_ACCOUNT_ID="your_account_id"
+export ZOOM_CLIENT_ID="your_client_id"
+export ZOOM_CLIENT_SECRET="your_client_secret"
 ```
 
-3. Set `ZOOM_ACCESS_TOKEN` to a valid OAuth access token with scopes needed for user presence and phone status.
-
-4. Install dependencies and run:
+## 3) Run script
 
 ```bash
-npm install
-npm start
+python zoom_standalone_api.py --topic "API Demo" --start "2026-03-15T17:00:00Z" --duration 30
 ```
 
-## Example call
+Optional:
+
+- `--user you@company.com` to create the meeting for a specific Zoom user.
+
+## Notes on “run in Zoom”
+
+A standalone script does **not** run inside the Zoom desktop app. It runs on your machine/server and calls Zoom's REST API.
+If you need in-client behavior, that is a separate Zoom App or Meeting SDK implementation.
+
+## Publish to GitHub
+
+From this repo:
 
 ```bash
-curl "http://localhost:3000/tool/zoom-user-availability?userId=user@example.com"
+git remote add origin <your-github-repo-url>
+git push -u origin <your-branch-name>
 ```
 
-## Example response
+---
 
-```json
-{
-  "userId": "user@example.com",
-  "isBusy": true,
-  "isInMeeting": true,
-  "isOnPhoneCall": false,
-  "isAvailable": false,
-  "raw": {
-    "presence": {
-      "presence_status": "Do_Not_Disturb"
-    },
-    "phoneStatus": {
-      "status": "idle"
-    }
-  }
-}
+## Zoom Virtual Agent callback SMS script
+
+This repo also includes `zoom_va_sms_callback.js` to send a Zoom Phone SMS to a busy person with instructions to call the original caller back.
+
+### Use case
+
+- A caller reaches Zoom Virtual Agent.
+- The intended person is busy.
+- Send that person an SMS like: `Please call +15559876543 back.`
+
+### Required scopes
+
+For Server-to-Server OAuth, add scopes required for Zoom Phone SMS in your Zoom app (for example, appropriate `phone:sms:*` and related phone scopes for your account configuration).
+
+### Run with Virtual Agent context JSON
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --va-context-json va_context.json
 ```
 
-## Notes for Zoom Phone AI Virtual Agent Tool integration
+### Run with explicit caller number
 
-- Configure your Tool to call this endpoint.
-- In your skill logic, use:
-  - `isOnPhoneCall === true` → user is currently on a phone call.
-  - `isInMeeting === true` → user is currently in a meeting.
-  - `isBusy === true` → user should be treated as unavailable.
-  - `isAvailable === true` → user can be treated as reachable.
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --caller-number +15559876543
+```
+
+### Dry run (no API call)
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --caller-number +15559876543 \
+  --dry-run
+```
+
+### Custom message format
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --caller-number +15559876543 \
+  --message-template "Callback requested from {caller_number}."
+```
