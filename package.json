@@ -1,4 +1,9 @@
 {
+  "name": "zoom-user-status-standalone-js",
+  "version": "1.1.0",
+  "private": true,
+  "scripts": {
+    "check": "node --check src/zoom-user-status.js"
   "name": "zoom-user-availability-tool",
   "version": "1.0.1",
   "private": true,
