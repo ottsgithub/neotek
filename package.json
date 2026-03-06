@@ -4,5 +4,15 @@
   "private": true,
   "scripts": {
     "check": "node --check src/zoom-user-status.js"
+  "name": "zoom-user-availability-tool",
+  "version": "1.0.1",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
   }
 }
