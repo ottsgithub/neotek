@@ -52,3 +52,57 @@ From this repo:
 git remote add origin <your-github-repo-url>
 git push -u origin <your-branch-name>
 ```
+
+---
+
+## Zoom Virtual Agent callback SMS script
+
+This repo also includes `zoom_va_sms_callback.js` to send a Zoom Phone SMS to a busy person with instructions to call the original caller back.
+
+### Use case
+
+- A caller reaches Zoom Virtual Agent.
+- The intended person is busy.
+- Send that person an SMS like: `Please call +15559876543 back.`
+
+### Required scopes
+
+For Server-to-Server OAuth, add scopes required for Zoom Phone SMS in your Zoom app (for example, appropriate `phone:sms:*` and related phone scopes for your account configuration).
+
+### Run with Virtual Agent context JSON
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --va-context-json va_context.json
+```
+
+### Run with explicit caller number
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --caller-number +15559876543
+```
+
+### Dry run (no API call)
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --caller-number +15559876543 \
+  --dry-run
+```
+
+### Custom message format
+
+```bash
+node zoom_va_sms_callback.js \
+  --recipient-number +15551234567 \
+  --from-number +15557654321 \
+  --caller-number +15559876543 \
+  --message-template "Callback requested from {caller_number}."
+```
